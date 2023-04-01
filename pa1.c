@@ -15,7 +15,9 @@
 
 #include <stdio.h>
 #include <string.h>
-
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdlib.h>
 /***********************************************************************
  * run_command()
  *
@@ -28,12 +30,23 @@
  *   Return 0 when user inputs "exit"
  *   Return <0 on error
  */
+
 int run_command(int nr_tokens, char *tokens[])
 {
 	if (strcmp(tokens[0], "exit") == 0) return 0;
-
-	fprintf(stderr, "Unable to execute %s\n", tokens[0]);
-	return 1;
+	int pid = fork();
+	if(pid == 0){
+		execvp(tokens[0], &tokens[0]);
+		fprintf(stdout, "Unable to execute %s\n", tokens[0]); // 나중에 바꿔야됨
+		exit(1);
+	}else if(pid == -1){
+		fprintf(stdout, "Unable to execute %s\n", tokens[0]); // 나중에 바꿔야됨
+		return -1;
+	}else{
+		int status;
+		wait(&status);
+		return 1;
+	}
 }
 
 
