@@ -34,6 +34,15 @@
 int run_command(int nr_tokens, char *tokens[])
 {
 	if (strcmp(tokens[0], "exit") == 0) return 0;
+	if(strcmp(tokens[0], "cd") == 0){
+		if(nr_tokens == 1 || strcmp(tokens[1], "~") == 0){
+			chdir(getenv("HOME"));
+			return 1;
+		}else{
+			chdir(tokens[1]);
+			return 1;
+		}
+	}
 	int pid = fork();
 	if(pid == 0){
 		execvp(tokens[0], &tokens[0]);
@@ -45,7 +54,6 @@ int run_command(int nr_tokens, char *tokens[])
 	}else{
 		int status;
 		waitpid(pid, &status, 0);
-		
 		return 1;
 	}
 }
