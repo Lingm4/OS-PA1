@@ -19,24 +19,19 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <stdlib.h>
-#include <signal.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
 
 #include "types.h"
 #include "list_head.h"
 
 #define READ 0
 #define WRITE 1
+
 /***********************************************************************
- * list struct
+ * alias_list struct
  *
  * add_list_entry()
- * remove_list_entry()
- * RETURN VALUE
- *   Return 1 on successful command execution
- *   Return 0 when user inputs "exit"
- *   Return <0 on error
+ * dump_alias_list()
+ * find_alias_list_entry
  */
 
 LIST_HEAD(alias_list);
@@ -127,7 +122,10 @@ int find_token(char **tokens, char *target){
 
 int run_command(int nr_tokens, char *tokens[])
 {
-	if (strcmp(tokens[0], "exit") == 0) return 0;
+	if (tokens[0] == NULL){
+		return -1;
+	}
+	else if(strcmp(tokens[0], "exit") == 0) return 0;
 	else if(strcmp(tokens[0], "cd") == 0){
 		if(nr_tokens == 1 || strcmp(tokens[1], "~") == 0){
 			chdir(getenv("HOME"));
@@ -169,10 +167,10 @@ int run_command(int nr_tokens, char *tokens[])
 				close(fd[WRITE]);
 				dup2(fd[READ], 0);					
 				execvp(tokens[pip+1], &tokens[pip+1]);
-				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				fprintf(stderr, "Unable to execute %s\n", tokens[pip+1]);
 				return -1;
 			}else if(pid2 == -1){
-				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				fprintf(stderr, "Unable to execute %s\n", tokens[pip+1]);
 				return -1;
 			}
 			close(fd[READ]);
