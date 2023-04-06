@@ -17,10 +17,17 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+
 #include "types.h"
 #include "list_head.h"
 
+#define READ 0
+#define WRITE 1
 /***********************************************************************
  * list struct
  *
@@ -71,7 +78,6 @@ void dump_alias_list(void)
 }
 
 struct alias_list_entry *find_alias_list_entry(const char *const target){
-	//printf("finding %s...\n", target); //지워야함
 	struct list_head *pos;
 	list_for_each_prev(pos, &alias_list){
 		if(strcmp(target, list_entry(pos, struct alias_list_entry, list)->replace)==0) return list_entry(pos, struct alias_list_entry, list);
@@ -83,23 +89,27 @@ void make_tokens_replacing_alias(char **tokens, int *nr_tokens){
 	for(int i=0; i<*nr_tokens; i++){
 		struct alias_list_entry *target_alias_entry = find_alias_list_entry(tokens[i]);
 		if(target_alias_entry != NULL){
-			//printf("replacing...\n");
 			for(int j=0; j<target_alias_entry->nr_origin-1; j++){
 				for(int k=0; k<*nr_tokens-i; k++){
-					//printf("push tokens...\n");
 					free(tokens[*nr_tokens-k]);
 					tokens[*nr_tokens-k] = strdup(tokens[*nr_tokens-k-1]);
 				}
 				(*nr_tokens)++;
 			}
 			for(int j=0; j<target_alias_entry->nr_origin; j++){
-				//printf("push origin...\n");
 				free(tokens[i+j]);
 				tokens[i+j] = strdup(target_alias_entry->origin[j]);
 			}
 			i+=target_alias_entry->nr_origin-1;
 		}
 	}
+}
+
+int find_token(char **tokens, char *target){
+	for(int i=0; tokens[i]!=NULL; i++){
+		if(strcmp(target, tokens[i])==0) return i;
+	}
+	return -1;
 }
 
 /***********************************************************************
@@ -132,23 +142,59 @@ int run_command(int nr_tokens, char *tokens[])
 		return 1;
 	}else{
 		make_tokens_replacing_alias(tokens, &nr_tokens);
-		/*
-		for(int i=0; i<nr_tokens; i++){
-			printf("%s ", tokens[i]);
-		}printf("\n");
-		*/
-		int pid = fork();
-		if(pid == 0){
-			execvp(tokens[0], &tokens[0]);
-			fprintf(stderr, "Unable to execute %s\n", tokens[0]);
-			exit(1);
-		}else if(pid == -1){
-			fprintf(stderr, "Unable to execute %s\n", tokens[0]);
-			return -1;
-		}else{
+		int pip = find_token(tokens, "|");
+		
+		if(pip!=-1){
+			free(tokens[pip]);
+			tokens[pip] = NULL;
+			int fd[2];
+			if(pipe(fd) < 0){
+                printf("pipe error\n");
+                return -1;
+        	}
+			int pid1 = fork();
+			if(pid1 == 0){
+				close(fd[READ]);
+				dup2(fd[WRITE], 1);
+				execvp(tokens[0], &tokens[0]);
+				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				return -1;
+			}else if(pid1 == -1){
+				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				return -1;
+			}
+
+			int pid2 = fork();
+			if(pid2 == 0){
+				close(fd[WRITE]);
+				dup2(fd[READ], 0);					
+				execvp(tokens[pip+1], &tokens[pip+1]);
+				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				return -1;
+			}else if(pid2 == -1){
+				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				return -1;
+			}
+			close(fd[READ]);
+			close(fd[WRITE]);
 			int status;
-			waitpid(pid, &status, 0);
+			waitpid(pid1, &status, 0);	
+			waitpid(pid2, &status, 0);
 			return 1;
+		}else{
+			int pid = fork();
+			if(pid == 0){
+				execvp(tokens[0], &tokens[0]);
+				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				return -1;
+			}else if(pid == -1){
+				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				return -1;
+			}else{
+				int status;
+				waitpid(pid, &status, 0);
+				return 1;
+			}
 		}
 	}
 }
