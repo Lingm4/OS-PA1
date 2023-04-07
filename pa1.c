@@ -27,9 +27,9 @@
 #define WRITE 1
 
 /***********************************************************************
- * alias_list struct
+ * alias_list
  *
- * add_list_entry()
+ * add_alias_list_entry()
  * dump_alias_list()
  * find_alias_list_entry
  */
@@ -43,7 +43,7 @@ struct alias_list_entry{
 	struct list_head list;
 };
 
-void add_list_entry(char **const org, const int nr_org, char * const rep)
+void add_alias_list_entry(char **const org, const int nr_org, char * const rep)
 {
 	struct alias_list_entry *new_entry = (struct alias_list_entry *)malloc(sizeof(struct alias_list_entry));
 	
@@ -80,6 +80,10 @@ struct alias_list_entry *find_alias_list_entry(const char *const target){
 	return NULL;
 }
 
+/***********************************************************************
+ * Useful fuctions
+ */
+
 void make_tokens_replacing_alias(char **tokens, int *nr_tokens){
 	for(int i=0; i<*nr_tokens; i++){
 		struct alias_list_entry *target_alias_entry = find_alias_list_entry(tokens[i]);
@@ -104,7 +108,7 @@ int find_token(char **tokens, char *target){
 	for(int i=0; tokens[i]!=NULL; i++){
 		if(strcmp(target, tokens[i])==0) return i;
 	}
-	return -1;
+	return -1; //when tokens don't have target
 }
 
 /***********************************************************************
@@ -122,9 +126,7 @@ int find_token(char **tokens, char *target){
 
 int run_command(int nr_tokens, char *tokens[])
 {
-	if (tokens[0] == NULL){
-		return -1;
-	}
+	if (tokens[0] == NULL) return -1;
 	else if(strcmp(tokens[0], "exit") == 0) return 0;
 	else if(strcmp(tokens[0], "cd") == 0){
 		if(nr_tokens == 1 || strcmp(tokens[1], "~") == 0){
@@ -136,7 +138,7 @@ int run_command(int nr_tokens, char *tokens[])
 		}
 	}else if(strcmp(tokens[0], "alias") == 0){
 		if(nr_tokens == 1) dump_alias_list();
-		else add_list_entry(&tokens[2], nr_tokens-2, tokens[1]);
+		else add_alias_list_entry(&tokens[2], nr_tokens-2, tokens[1]);
 		return 1;
 	}else{
 		make_tokens_replacing_alias(tokens, &nr_tokens);
@@ -147,7 +149,7 @@ int run_command(int nr_tokens, char *tokens[])
 			tokens[pip] = NULL;
 			int fd[2];
 			if(pipe(fd) < 0){
-                printf("pipe error\n");
+                fprintf(stderr,"pipe error\n");
                 return -1;
         	}
 			int pid1 = fork();
@@ -156,6 +158,7 @@ int run_command(int nr_tokens, char *tokens[])
 				dup2(fd[WRITE], 1);
 				execvp(tokens[0], &tokens[0]);
 				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				exit(1);
 				return -1;
 			}else if(pid1 == -1){
 				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
@@ -168,6 +171,7 @@ int run_command(int nr_tokens, char *tokens[])
 				dup2(fd[READ], 0);					
 				execvp(tokens[pip+1], &tokens[pip+1]);
 				fprintf(stderr, "Unable to execute %s\n", tokens[pip+1]);
+				exit(1);
 				return -1;
 			}else if(pid2 == -1){
 				fprintf(stderr, "Unable to execute %s\n", tokens[pip+1]);
@@ -184,6 +188,7 @@ int run_command(int nr_tokens, char *tokens[])
 			if(pid == 0){
 				execvp(tokens[0], &tokens[0]);
 				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
+				exit(1);
 				return -1;
 			}else if(pid == -1){
 				fprintf(stderr, "Unable to execute %s\n", tokens[0]);
